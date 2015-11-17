@@ -34,8 +34,6 @@ public class UserStoreConfigConstants {
     public static final String maxUserNameListLengthDescription = "Maximum number of users retrieved at once";
     public static final String userRolesCacheEnabled = "UserRolesCacheEnabled";
     public static final String userRolesCacheEnabledDescription = "This is to indicate whether to cache the role list of a user";
-    public static final String SCIMEnabled = "SCIMEnabled";
-    public static final String SCIMEnabledDescription = "Whether SCIM is enabled for the user store";
     public static final String DisplayNameAttribute = "DisplayNameAttribute";
     public static final String DisplayNameAttributeDescription = "Attribute name to display as the Display Name";
     public static final String CASE_SENSITIVE_USERNAME = "CaseSensitiveUsername";
