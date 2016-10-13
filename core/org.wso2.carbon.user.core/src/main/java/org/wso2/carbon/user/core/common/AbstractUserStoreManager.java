@@ -356,7 +356,9 @@ public abstract class AbstractUserStoreManager implements UserStoreManager {
                 String tempUserName = map.get(userNameAttribute);
                 if (tempUserName != null) {
                     userName = tempUserName;
-                    log.debug("Replaced user name : " + userName + " from user property value : " + tempUserName);
+                    if (log.isDebugEnabled()) {
+                        log.debug("Replaced user name : " + userName + " from user property value : " + tempUserName);
+                    }
                 }
             }
         }
