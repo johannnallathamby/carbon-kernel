@@ -35,6 +35,7 @@ import org.wso2.carbon.user.core.claim.dao.ClaimDAO;
 import org.wso2.carbon.user.core.config.RealmConfigXMLProcessor;
 import org.wso2.carbon.user.core.constants.UserCoreClaimConstants;
 import org.wso2.carbon.user.core.internal.UserStoreMgtDSComponent;
+import org.wso2.carbon.user.core.profile.DefaultProfileConfigurationManager;
 import org.wso2.carbon.user.core.profile.ProfileConfiguration;
 import org.wso2.carbon.user.core.profile.ProfileConfigurationManager;
 import org.wso2.carbon.user.core.profile.builder.ProfileBuilderException;
@@ -95,7 +96,7 @@ public class DefaultRealm implements UserRealm {
         } else {
             claimMan = new DefaultClaimManager(claimMappings, dataSource, tenantId);
         }
-        initializeObjects();
+        initializeObjects(true);
     }
 
     public void init(RealmConfiguration configBean, Map<String, Object> propertiesMap, int tenantId)
@@ -124,7 +125,16 @@ public class DefaultRealm implements UserRealm {
             populateProfileAndClaimMaps(claimMappings, profileConfigs);
             claimMan = new DefaultClaimManager(claimMappings, dataSource, tenantId);
         }
-        initializeObjects();
+
+        if (Boolean.parseBoolean(realmConfig.getRealmProperty(UserCoreClaimConstants
+                                                                      .INITIALIZE_NEW_USER_STORE_MANAGER)) &&
+            UserStoreMgtDSComponent.getUserStoreManagerFactory() != null) {
+            this.userStoreManager = UserStoreMgtDSComponent.getUserStoreManagerFactory().createUserStoreManager
+                    (realmConfig, claimMan, tenantId);
+            initializeObjects(false);
+        } else {
+            initializeObjects(true);
+        }
     }
 
     public UserStoreManager getUserStoreManager() throws UserStoreException {
@@ -212,103 +222,104 @@ public class DefaultRealm implements UserRealm {
         return realmConfig;
     }
 
-    private void initializeObjects() throws UserStoreException {
+    private void initializeObjects(boolean initializeUserStoreManagers) throws UserStoreException {
         try {
-
-            String value = realmConfig.getUserStoreClass();
-            if (value == null) {
-                log.info("System is functioning without user store writing ability. User add/edit/delete will not work");
-            } else {
-                this.userStoreManager = (UserStoreManager) createObjectWithOptions(value,
-                        realmConfig, properties);
-            }
-
-            RealmConfiguration tmpRealmConfig = realmConfig.getSecondaryRealmConfig();
-            UserStoreManager tmpUserStoreManager = userStoreManager;
-
-            String domainName = realmConfig
-                    .getUserStoreProperty(UserCoreConstants.RealmConfig.PROPERTY_DOMAIN_NAME);
-            if (domainName != null) {
-                userStoreManager.addSecondaryUserStoreManager(domainName, userStoreManager);
-            }
-
-            boolean isDisabled = false;
-
-            if (realmConfig.getUserStoreProperty(UserCoreConstants.RealmConfig.USER_STORE_DISABLED) != null) {
-                isDisabled = Boolean.parseBoolean(realmConfig
-                        .getUserStoreProperty(UserCoreConstants.RealmConfig.USER_STORE_DISABLED));
-                if (isDisabled) {
-                    log.warn("You cannot disable the primary user store.");
-                }
-            }
-
-            while (tmpRealmConfig != null) {
-                value = tmpRealmConfig.getUserStoreClass();
+            if(initializeUserStoreManagers) {
+                String value = realmConfig.getUserStoreClass();
                 if (value == null) {
                     log.info("System is functioning without user store writing ability. User add/edit/delete will not work");
                 } else {
-                    try {
-                        UserStoreManager manager = (UserStoreManager) createObjectWithOptions(
-                                value, tmpRealmConfig, properties);
+                    this.userStoreManager = (UserStoreManager) createObjectWithOptions(value,
+                                                                                       realmConfig, properties);
+                }
 
-                        domainName = tmpRealmConfig
-                                .getUserStoreProperty(UserCoreConstants.RealmConfig.PROPERTY_DOMAIN_NAME);
+                RealmConfiguration tmpRealmConfig = realmConfig.getSecondaryRealmConfig();
+                UserStoreManager tmpUserStoreManager = userStoreManager;
 
-                        if (domainName != null) {
-                            if (userStoreManager.getSecondaryUserStoreManager(domainName) != null) {
-                                log.warn("Could not initialize secondary user store manager."
-                                        + "Duplicate domain names not allowed.");
-                                tmpRealmConfig = tmpRealmConfig.getSecondaryRealmConfig();
-                                continue;
-                            } else {
-                                isDisabled = false;
+                String domainName = realmConfig
+                        .getUserStoreProperty(UserCoreConstants.RealmConfig.PROPERTY_DOMAIN_NAME);
+                if (domainName != null) {
+                    userStoreManager.addSecondaryUserStoreManager(domainName, userStoreManager);
+                }
 
-                                if (tmpRealmConfig
-                                        .getUserStoreProperty(UserCoreConstants.RealmConfig.USER_STORE_DISABLED) != null) {
-                                    isDisabled = Boolean
-                                            .parseBoolean(tmpRealmConfig
-                                                    .getUserStoreProperty(UserCoreConstants.RealmConfig.USER_STORE_DISABLED));
-                                    if (isDisabled) {
-                                        log.warn("Secondary user store disabled with domain " + domainName
-                                                + ".");
-                                        tmpRealmConfig = tmpRealmConfig.getSecondaryRealmConfig();
-                                        continue;
-                                    }
-                                }
+                boolean isDisabled = false;
 
-                                tmpUserStoreManager.setSecondaryUserStoreManager(manager);
-                                userStoreManager.addSecondaryUserStoreManager(domainName,
-                                        tmpUserStoreManager.getSecondaryUserStoreManager());
-                            }
-                        } else {
-                            log.warn("Could not initialize secondary user store manager.  "
-                                    + "Domain name is not defined");
-                            tmpRealmConfig = tmpRealmConfig.getSecondaryRealmConfig();
-                            continue;
-                        }
-
-
-                    } catch (Exception e) {
-                        if (tmpRealmConfig.isPrimary()) {
-                            String errorMessage = "Cannot create connection to the primary user store. Error message "
-                                                  + e.getMessage();
-                            if (log.isDebugEnabled()) {
-                                log.debug(errorMessage, e);
-                            }
-                            throw new UserStoreException(errorMessage, e);
-                        } else {
-                            log.warn("Could not initialize secondary user store manager", e);
-                            tmpRealmConfig = tmpRealmConfig.getSecondaryRealmConfig();
-                            continue;
-                        }
+                if (realmConfig.getUserStoreProperty(UserCoreConstants.RealmConfig.USER_STORE_DISABLED) != null) {
+                    isDisabled = Boolean.parseBoolean(realmConfig
+                                                              .getUserStoreProperty(UserCoreConstants.RealmConfig.USER_STORE_DISABLED));
+                    if (isDisabled) {
+                        log.warn("You cannot disable the primary user store.");
                     }
                 }
 
-                tmpUserStoreManager = tmpUserStoreManager.getSecondaryUserStoreManager();
-                tmpRealmConfig = tmpRealmConfig.getSecondaryRealmConfig();
+                while (tmpRealmConfig != null) {
+                    value = tmpRealmConfig.getUserStoreClass();
+                    if (value == null) {
+                        log.info("System is functioning without user store writing ability. User add/edit/delete will not work");
+                    } else {
+                        try {
+                            UserStoreManager manager = (UserStoreManager) createObjectWithOptions(
+                                    value, tmpRealmConfig, properties);
+
+                            domainName = tmpRealmConfig
+                                    .getUserStoreProperty(UserCoreConstants.RealmConfig.PROPERTY_DOMAIN_NAME);
+
+                            if (domainName != null) {
+                                if (userStoreManager.getSecondaryUserStoreManager(domainName) != null) {
+                                    log.warn("Could not initialize secondary user store manager."
+                                             + "Duplicate domain names not allowed.");
+                                    tmpRealmConfig = tmpRealmConfig.getSecondaryRealmConfig();
+                                    continue;
+                                } else {
+                                    isDisabled = false;
+
+                                    if (tmpRealmConfig
+                                                .getUserStoreProperty(UserCoreConstants.RealmConfig.USER_STORE_DISABLED) != null) {
+                                        isDisabled = Boolean
+                                                .parseBoolean(tmpRealmConfig
+                                                                      .getUserStoreProperty(UserCoreConstants.RealmConfig.USER_STORE_DISABLED));
+                                        if (isDisabled) {
+                                            log.warn("Secondary user store disabled with domain " + domainName
+                                                     + ".");
+                                            tmpRealmConfig = tmpRealmConfig.getSecondaryRealmConfig();
+                                            continue;
+                                        }
+                                    }
+
+                                    tmpUserStoreManager.setSecondaryUserStoreManager(manager);
+                                    userStoreManager.addSecondaryUserStoreManager(domainName,
+                                                                                  tmpUserStoreManager.getSecondaryUserStoreManager());
+                                }
+                            } else {
+                                log.warn("Could not initialize secondary user store manager.  "
+                                         + "Domain name is not defined");
+                                tmpRealmConfig = tmpRealmConfig.getSecondaryRealmConfig();
+                                continue;
+                            }
+
+
+                        } catch (Exception e) {
+                            if (tmpRealmConfig.isPrimary()) {
+                                String errorMessage = "Cannot create connection to the primary user store. Error message "
+                                                      + e.getMessage();
+                                if (log.isDebugEnabled()) {
+                                    log.debug(errorMessage, e);
+                                }
+                                throw new UserStoreException(errorMessage, e);
+                            } else {
+                                log.warn("Could not initialize secondary user store manager", e);
+                                tmpRealmConfig = tmpRealmConfig.getSecondaryRealmConfig();
+                                continue;
+                            }
+                        }
+                    }
+
+                    tmpUserStoreManager = tmpUserStoreManager.getSecondaryUserStoreManager();
+                    tmpRealmConfig = tmpRealmConfig.getSecondaryRealmConfig();
+                }
             }
 
-            value = realmConfig.getAuthorizationManagerClass();
+            String value = realmConfig.getAuthorizationManagerClass();
             if (value == null) {
                 String message = "System cannot continue. Authorization writer is null";
                 log.error(message);
@@ -486,6 +497,15 @@ public class DefaultRealm implements UserRealm {
             this.claimMan = claimManager;
         } else {
             throw new IllegalAccessException("Set claim manager is not allowed");
+        }
+    }
+
+    private void setUserStoreManager(UserStoreManager userStoreManager) throws IllegalAccessException {
+        if (Boolean.parseBoolean(realmConfig.getRealmProperty(UserCoreClaimConstants.INITIALIZE_NEW_USER_STORE_MANAGER)
+        )) {
+            this.userStoreManager = userStoreManager;
+        } else {
+            throw new IllegalAccessException("Set user store manager is not allowed");
         }
     }
 

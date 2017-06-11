@@ -26,6 +26,7 @@ import org.wso2.carbon.context.PrivilegedCarbonContext;
 import org.wso2.carbon.user.api.RealmConfiguration;
 import org.wso2.carbon.user.api.UserStoreManager;
 import org.wso2.carbon.user.core.UserStoreConfigConstants;
+import org.wso2.carbon.user.core.UserStoreManagerFactory;
 import org.wso2.carbon.user.core.claim.ClaimManager;
 import org.wso2.carbon.user.core.jdbc.JDBCUserStoreManager;
 import org.wso2.carbon.user.core.ldap.ActiveDirectoryUserStoreManager;
@@ -53,12 +54,17 @@ import java.lang.reflect.Method;
  * interface="org.wso2.carbon.user.core.claim.ClaimManagerFactory" cardinality="0..1"
  * policy="dynamic"  bind="setClaimManagerFactory"
  * unbind="unsetClaimManagerFactory"
+ * @scr.reference name="user.store.mgt.component"
+ * interface="org.wso2.carbon.user.core.UserStoreManagerFactory" cardinality="0..1"
+ * policy="dynamic"  bind="setUserStoreManagerFactory"
+ * unbind="unsetUserStoreManagerFactory"
  */
 public class UserStoreMgtDSComponent {
     private static Log log = LogFactory.getLog(UserStoreMgtDSComponent.class);
     private static RealmService realmService;
     private static ServerConfigurationService serverConfigurationService = null;
     private static ClaimManagerFactory claimManagerFactory = null;
+    private static UserStoreManagerFactory userStoreManagerFactory = null;
 
     public static RealmService getRealmService() {
         return realmService;
@@ -177,6 +183,52 @@ public class UserStoreMgtDSComponent {
             }
         } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
             log.error("No claim manager setter found for " + object.getClass() + " or its supper classes");
+        }
+
+    }
+
+    public static UserStoreManagerFactory getUserStoreManagerFactory() {
+        return UserStoreMgtDSComponent.userStoreManagerFactory;
+    }
+
+    protected void setUserStoreManagerFactory(UserStoreManagerFactory userStoreManagerFactory) {
+        this.userStoreManagerFactory = userStoreManagerFactory;
+        try {
+            org.wso2.carbon.user.core.UserStoreManager userStoreManager =
+                    userStoreManagerFactory.createUserStoreManager(realmService.getBootstrapRealmConfiguration(),
+                                                                   realmService.getBootstrapRealm().getClaimManager(),
+                                                                   MultitenantConstants.SUPER_TENANT_ID);
+            setUserStoreManager(realmService.getBootstrapRealm(), userStoreManager);
+        } catch (Exception e) {
+            log.error("Error while setting claim manager from claim manager factory");
+        }
+
+    }
+
+    protected void unsetUserStoreManagerFactory(UserStoreManagerFactory userStoreManagerFactory) {
+        UserStoreMgtDSComponent.userStoreManagerFactory = null;
+    }
+
+    private void setUserStoreManager(Object object, UserStoreManager userStoreManager) {
+        try {
+            Class<?> currentClass = object.getClass();
+            Method method = null;
+            try {
+                method = currentClass.getDeclaredMethod("setUserStoreManager",
+                                                        org.wso2.carbon.user.core.UserStoreManager.class);
+            } catch (NoSuchMethodException e) {
+                // method not present - try super class
+            }
+            if (method != null) {
+                method.setAccessible(true);
+                method.invoke(object, userStoreManager);
+                log.info("UserStoreManager set for " + object.getClass());
+                method.setAccessible(false);
+            } else {
+                throw new NoSuchMethodException();
+            }
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+            log.error("No user store manager setter found for " + object.getClass());
         }
 
     }

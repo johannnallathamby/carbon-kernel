@@ -24,10 +24,13 @@ import org.wso2.carbon.user.core.AuthorizationManager;
 import org.wso2.carbon.user.core.UserCoreConstants;
 import org.wso2.carbon.user.core.UserRealm;
 import org.wso2.carbon.user.core.UserStoreException;
+import org.wso2.carbon.user.core.UserStoreManager;
 import org.wso2.carbon.user.core.claim.ClaimManager;
 import org.wso2.carbon.user.core.common.AbstractUserStoreManager;
+import org.wso2.carbon.user.core.constants.UserCoreClaimConstants;
 import org.wso2.carbon.user.core.constants.UserCoreDBConstants;
 import org.wso2.carbon.user.core.internal.UMListenerServiceComponent;
+import org.wso2.carbon.user.core.internal.UserStoreMgtDSComponent;
 import org.wso2.carbon.user.core.ldap.LDAPConstants;
 import org.wso2.carbon.user.core.listener.AuthorizationManagerListener;
 import org.wso2.carbon.user.core.profile.ProfileConfigurationManager;
@@ -257,8 +260,14 @@ public class JDBCAuthorizationManager implements AuthorizationManager {
                 }
 
                 if (roles == null || roles.length == 0) {
-                    AbstractUserStoreManager manager = (AbstractUserStoreManager) userRealm.getUserStoreManager();
-                    roles = manager.doGetRoleListOfUser(userName, "*");
+                    boolean newUSM = Boolean.parseBoolean(realmConfig.getRealmProperty(UserCoreClaimConstants
+                                                                               .INITIALIZE_NEW_USER_STORE_MANAGER));
+                    if(newUSM) {
+                       userRealm.getUserStoreManager().getRoleListOfUser(userName);
+                    } else {
+                        AbstractUserStoreManager manager = (AbstractUserStoreManager) userRealm.getUserStoreManager();
+                        roles = manager.doGetRoleListOfUser(userName, "*");
+                    }
                 }
 
                 loopAllowedRoles:
@@ -276,7 +285,7 @@ public class JDBCAuthorizationManager implements AuthorizationManager {
                 }
 
             } else {
-                AbstractUserStoreManager manager = (AbstractUserStoreManager) userRealm.getUserStoreManager();
+                UserStoreManager manager = userRealm.getUserStoreManager();
                 for (String role : allowedRoles) {
                     try {
                         if (manager.isUserInRole(userName, role)) {
@@ -294,6 +303,8 @@ public class JDBCAuthorizationManager implements AuthorizationManager {
                         if (log.isDebugEnabled()) {
                             log.debug(userName + " user is not in role :  " + role, e);
                         }
+                    } catch (org.wso2.carbon.user.api.UserStoreException e) {
+                        e.printStackTrace();
                     }
                 }
             }

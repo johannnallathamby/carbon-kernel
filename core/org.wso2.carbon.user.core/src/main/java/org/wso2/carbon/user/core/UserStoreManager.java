@@ -346,6 +346,8 @@ public interface UserStoreManager extends org.wso2.carbon.user.api.UserStoreMana
      */
     RealmConfiguration getRealmConfiguration();
 
+    boolean isUserInRole(String userName, String roleName) throws org.wso2.carbon.user.api.UserStoreException;
+
     /**
      * Check the case sensitivity of user name in user store
      *

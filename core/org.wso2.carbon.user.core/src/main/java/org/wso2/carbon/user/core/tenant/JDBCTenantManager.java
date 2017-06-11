@@ -28,6 +28,7 @@ import org.wso2.carbon.user.core.UserStoreException;
 import org.wso2.carbon.user.core.common.RealmCache;
 import org.wso2.carbon.user.core.common.UserStoreDeploymentManager;
 import org.wso2.carbon.user.core.config.RealmConfigXMLProcessor;
+import org.wso2.carbon.user.core.constants.UserCoreClaimConstants;
 import org.wso2.carbon.user.core.util.DatabaseUtil;
 import org.wso2.carbon.utils.CarbonUtils;
 import org.wso2.carbon.utils.DBUtils;
@@ -330,7 +331,11 @@ public class JDBCTenantManager implements TenantManager {
                 tenant.setCreatedDate(createdDate);
                 tenant.setActive(active);
                 tenant.setRealmConfig(realmConfig);
-                setSecondaryUserStoreConfig(realmConfig, tenantId);
+                boolean newUSM = Boolean.parseBoolean(realmConfig.getRealmProperty(UserCoreClaimConstants
+                                                                                           .INITIALIZE_NEW_USER_STORE_MANAGER));
+                if(!newUSM) {
+                    setSecondaryUserStoreConfig(realmConfig, tenantId);
+                }
                 tenant.setAdminName(realmConfig.getAdminUserName());
                 tenantCacheManager.addToCache(new TenantIdKey(id), new TenantCacheEntry<Tenant>(tenant));
             }
